@@ -1,181 +1,288 @@
 <!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8"/>
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Analyse Liasse Fiscale — 1 fichier</title>
+  <title>Liasse Fiscale — Dashboard complet (1 fichier, sans librairies)</title>
   <style>
-    :root{--bg:#0f172a;--panel:#111827;--ink:#e5e7eb;--muted:#9ca3af;--ok:#10b981;--bad:#ef4444}
-    *{box-sizing:border-box} body{margin:0;background:#0b1220;color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto}
-    header{padding:16px 20px;background:#0f172a;border-bottom:1px solid #1f2937}
-    h1{font-size:18px;margin:0} .wrap{max-width:1200px;margin:auto;padding:20px;}
-    .grid{display:grid;gap:16px} .g-3{grid-template-columns:2fr 1fr} .panel{background:var(--panel);border:1px solid #1f2937;border-radius:14px;padding:14px}
-    .kpis{display:grid;gap:10px;grid-template-columns:repeat(4,minmax(0,1fr))}
-    .kpi{background:#0f172a;border:1px solid #1f2937;border-radius:12px;padding:10px}
-    .kpi small{color:var(--muted);display:block;margin-bottom:4px}
-    .flex{display:flex;gap:10px;align-items:center}
-    label{font-size:12px;color:var(--muted)} input[type=file]{width:100%}
-    .tbl{width:100%;border-collapse:collapse} .tbl th,.tbl td{padding:8px 10px;border-bottom:1px solid #1f2937;text-align:right}
+    :root{
+      --bg:#0b1220;--panel:#0f172a;--panel2:#0c162c;--card:#111827;--ink:#e5e7eb;--muted:#9fb2d6;--border:#20304f;
+      --ok:#16a34a;--warn:#f59e0b;--bad:#ef4444;--c1:#60a5fa;--c2:#22c55e;--c3:#f97316;--c4:#e879f9
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+    header{padding:14px 18px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+    header h1{margin:0;font-size:18px}
+    .wrap{max-width:1300px;margin:auto;padding:16px}
+    .grid{display:grid;gap:16px}
+    .g-3{grid-template-columns:2fr 1fr}
+    .panel{background:var(--panel2);border:1px solid var(--border);border-radius:14px;padding:14px}
+    .title{font-weight:700;font-size:15px;margin:0 0 10px 0}
+    .kpis{display:grid;gap:12px;grid-template-columns:repeat(4,minmax(0,1fr))}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;box-shadow:0 0 0 1px rgba(255,255,255,0.02) inset}
+    .card small{display:block;color:var(--muted);margin-bottom:6px}
+    .card .value{font-size:20px;font-weight:700}
+    .pill{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--border);color:#cbd5e1}
+    .ok{background:#052e24;border-color:#065f46;color:#a7f3d0}.warn{background:#3b2a05;border-color:#7c5f07;color:#fde68a}.bad{background:#3b0a0a;border-color:#7f1d1d;color:#fecaca}
+    .hint{color:var(--muted);font-size:12px}
+    .row{display:flex;gap:10px;align-items:center;margin:8px 0}
+    input[type=file], input[type=number]{background:#0f203a;border:1px solid var(--border);color:#cbd5e1;padding:8px;border-radius:8px}
+    input[type=range]{width:100%}
+    button{background:#1d4ed8;color:white;border:none;border-radius:10px;padding:8px 12px;cursor:pointer}
+    button.outline{background:transparent;border:1px solid var(--border);color:#cbd5e1}
+    .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+    .tab{padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:#0f203a;color:#cbd5e1;cursor:pointer}
+    .tab.active{background:#1d2746;color:#fff;border-color:#2b3c68}
+    .hidden{display:none}
+    .tbl{width:100%;border-collapse:collapse}
+    .tbl th,.tbl td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:right}
     .tbl th:first-child,.tbl td:first-child{text-align:left}
-    .badge{padding:2px 8px;border-radius:999px;border:1px solid #334155;color:#cbd5e1;font-size:12px}
-    .ok{background:#052e24;border-color:#064e3b;color:#a7f3d0} .bad{background:#3b0a0a;border-color:#7f1d1d;color:#fecaca}
-    .controls .row{margin-bottom:10px}
-    .row input[type=range]{width:100%}
-    .hint{color:#9ca3af;font-size:12px}
-    .title{font-weight:600;margin:0 0 8px 0;font-size:14px}
+    svg.chart{width:100%;height:300px;background:#0e1a31;border:1px solid var(--border);border-radius:12px}
+    .two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .cards2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
   </style>
-  <!-- React + Babel + Recharts UMD -->
-  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-  <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
-  <script src="https://unpkg.com/recharts/umd/Recharts.min.js"></script>
 </head>
 <body>
-  <header><div class="wrap"><h1>Analyse Liasse Fiscale — site 1 fichier</h1></div></header>
-  <div id="app" class="wrap"></div>
-
-  <script type="text/babel">
-const {useMemo,useState,useEffect,useRef} = React;
-const {AreaChart,Area,LineChart,Line,BarChart,Bar,XAxis,YAxis,CartesianGrid,Tooltip,Legend,ResponsiveContainer} = Recharts;
-
-const demo=[
-  { annee:2021, CA:1200000, COGS:720000, OPEX:270000, DandA:40000, interets:15000, impots:35000, stocks:160000, clients:210000, fournisseurs:130000, immoNette:360000, tresorerie:60000, capitauxPropres:320000, dettesLT:220000, dettesCT:140000, capex:50000 },
-  { annee:2022, CA:1380000, COGS:816000, OPEX:305000, DandA:42000, interets:18000, impots:42000, stocks:175000, clients:240000, fournisseurs:150000, immoNette:385000, tresorerie:70000, capitauxPropres:360000, dettesLT:240000, dettesCT:150000, capex:65000 },
-  { annee:2023, CA:1530000, COGS:882000, OPEX:330000, DandA:45000, interets:21000, impots:46000, stocks:190000, clients:260000, fournisseurs:165000, immoNette:410000, tresorerie:82000, capitauxPropres:385000, dettesLT:250000, dettesCT:160000, capex:70000 },
-  { annee:2024, CA:1620000, COGS:936000, OPEX:342000, DandA:46000, interets:24000, impots:50000, stocks:205000, clients:280000, fournisseurs:172000, immoNette:420000, tresorerie:90000, capitauxPropres:410000, dettesLT:250000, dettesCT:155000, capex:72000 },
-];
-
-// helpers
-const pct = (x)=> (Math.round(x*1000)/10)+"%"; const fmt=(x)=> new Intl.NumberFormat('fr-FR').format(x);
-function enrich(r){
-  const gross=r.CA-r.COGS; const ebitda=gross-r.OPEX; const ebit=ebitda-r.DandA; const ebt=ebit-r.interets; const net=ebt-r.impots;
-  const actifCourant=r.stocks+r.clients+r.tresorerie; const passifCourant=r.fournisseurs+r.dettesCT;
-  const totalActif=r.immoNette+actifCourant; const totalPassif=r.capitauxPropres+r.dettesLT+passifCourant;
-  const bfr=r.stocks+r.clients-r.fournisseurs; const frng=r.capitauxPropres+r.dettesLT-r.immoNette; const tn=r.tresorerie-(bfr-frng);
-  return {...r,gross,ebitda,ebit,ebt,net,actifCourant,passifCourant,totalActif,totalPassif,bfr,frng,tn};
-}
-function computeAll(rows){
-  const e=rows.map(enrich);
-  for(let i=0;i<e.length;i++){
-    const prev=e[i-1];
-    const dC=prev?e[i].clients-prev.clients:0; const dS=prev?e[i].stocks-prev.stocks:0; const dF=prev?e[i].fournisseurs-prev.fournisseurs:0;
-    e[i].cfo=e[i].ebitda-dC-dS+dF-e[i].impots; e[i].fcff=e[i].cfo-e[i].capex;
-  }
-  return e;
-}
-function ratios(rows){
-  return rows.map(r=>{
-    const current=r.actifCourant/Math.max(1,r.passifCourant); const quick=(r.tresorerie+r.clients)/Math.max(1,r.passifCourant);
-    const leverage=(r.dettesLT+r.dettesCT)/Math.max(1,r.capitauxPropres); const debtEbitda=(r.dettesLT+r.dettesCT)/Math.max(1,r.ebitda);
-    const intCover=r.ebit/Math.max(1,r.interets); const roa=r.net/Math.max(1,r.totalActif); const assetTurn=r.CA/Math.max(1,r.totalActif); const equityMult=r.totalActif/Math.max(1,r.capitauxPropres); const roe=roa*equityMult;
-    const dso=r.clients/Math.max(1,r.CA)*365; const dio=r.stocks/Math.max(1,r.COGS)*365; const dpo=r.fournisseurs/Math.max(1,r.COGS)*365; const ccc=dso+dio-dpo;
-    return {annee:r.annee, marginEbitda:r.ebitda/r.CA, marginNet:r.net/r.CA, quick,current,leverage,debtEbitda,intCover,roe,ccc, assetTurn,equityMult};
-  });
-}
-function parseCSV(txt){
-  const sep = txt.includes(';') && !txt.includes(',') ? ';' : ',';
-  const [h,...rows]=txt.trim().split(/\r?\n/); const H=h.split(sep).map(s=>s.trim());
-  return rows.map(r=>{const c=r.split(sep).map(s=>s.trim()); const o={}; H.forEach((k,i)=>o[k]=isNaN(+c[i])?c[i]:+c[i]); return o;});
-}
-
-function App(){
-  const [rows,setRows]=useState(demo);
-  const data=useMemo(()=>computeAll(rows),[rows]);
-  const R=useMemo(()=>ratios(data),[data]);
-  const last=data[data.length-1]; const rr=R[R.length-1]||{};
-
-  function onCSV(e){
-    const f=e.target.files?.[0]; if(!f) return; const reader=new FileReader();
-    reader.onload=()=>{ try{ const arr=parseCSV(String(reader.result)); setRows(arr.map(o=>({...o,annee:+o.annee}))); }catch{ alert('CSV invalide'); } };
-    reader.readAsText(f);
-  }
-
-  return (
-    <div className="grid g-3">
-      <div className="panel">
-        <div className="title">Synthèse</div>
-        <div className="kpis">
-          <div className="kpi"><small>CA</small><div>€ {fmt(last.CA)}</div></div>
-          <div className="kpi"><small>EBITDA</small><div>€ {fmt(last.ebitda)} ({pct(last.ebitda/last.CA)})</div></div>
-          <div className="kpi"><small>Résultat net</small><div>€ {fmt(last.net)} ({pct(last.net/last.CA)})</div></div>
-          <div className="kpi"><small>Dette/EBITDA</small><div>{((last.dettesLT+last.dettesCT)/Math.max(1,last.ebitda)).toFixed(2)}x</div></div>
-          <div className="kpi"><small>Quick</small><div>{(rr.quick||0).toFixed(2)}</div></div>
-          <div className="kpi"><small>Leverage</small><div>{(rr.leverage||0).toFixed(2)}x</div></div>
-          <div className="kpi"><small>ROE</small><div>{((rr.roe||0)*100).toFixed(1)}%</div></div>
-          <div className="kpi"><small>CCC</small><div>{(rr.ccc||0).toFixed(0)} j</div></div>
-        </div>
-
-        <div className="grid" style={{gridTemplateColumns:'1fr 1fr', marginTop:12, gap:16}}>
-          <div className="panel" style={{background:'#0f172a'}}>
-            <div className="title">Résultats</div>
-            <div style={{height:260}}>
-              <ResponsiveContainer>
-                <LineChart data={data.map(d=>({t:d.annee, CA:d.CA, EBITDA:d.ebitda, Net:d.net}))}>
-                  <CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="t"/><YAxis/><Tooltip/><Legend/>
-                  <Line type="monotone" dataKey="CA" dot={false}/>
-                  <Line type="monotone" dataKey="EBITDA" dot={false}/>
-                  <Line type="monotone" dataKey="Net" dot={false}/>
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-          <div className="panel" style={{background:'#0f172a'}}>
-            <div className="title">BFR / FRNG / Trésorerie nette</div>
-            <div style={{height:260}}>
-              <ResponsiveContainer>
-                <BarChart data={data.map(d=>({t:d.annee, BFR:d.bfr, FRNG:d.frng, TN:d.tn}))}>
-                  <CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="t"/><YAxis/><Tooltip/><Legend/>
-                  <Bar dataKey="BFR"/><Bar dataKey="FRNG"/><Bar dataKey="TN"/>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="panel">
-        <div className="title">Données</div>
-        <div className="controls">
-          <div className="row"><label>Importer CSV</label><input type="file" accept=".csv" onChange={onCSV}/></div>
-          <div className="hint">Colonnes: annee, CA, COGS, OPEX, DandA, interets, impots, stocks, clients, fournisseurs, immoNette, tresorerie, capitauxPropres, dettesLT, dettesCT, capex</div>
-        </div>
-        <div className="title" style={{marginTop:12}}>Ratios clés</div>
-        <table className="tbl">
-          <thead>
-            <tr><th>Année</th><th>EBITDA%</th><th>Net%</th><th>Quick</th><th>Leverage</th><th>Dette/EBITDA</th><th>Cover</th><th>ROE</th><th>CCC</th></tr>
-          </thead>
-          <tbody>
-            {R.map(x=> (
-              <tr key={x.annee}>
-                <td style={{textAlign:'left'}}>{x.annee}</td>
-                <td>{(x.marginEbitda*100).toFixed(1)}%</td>
-                <td>{(x.marginNet*100).toFixed(1)}%</td>
-                <td>{x.quick.toFixed(2)}</td>
-                <td>{x.leverage.toFixed(2)}x</td>
-                <td>{x.debtEbitda.toFixed(2)}x</td>
-                <td>{x.intCover.toFixed(1)}x</td>
-                <td>{(x.roe*100).toFixed(1)}%</td>
-                <td>{x.ccc.toFixed(0)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <div className="title" style={{marginTop:12}}>Flux de trésorerie (indirect)</div>
-        <div style={{height:240}}>
-          <ResponsiveContainer>
-            <BarChart data={data.map(d=>({t:d.annee, CFO:d.cfo, CFI:-d.capex, FCFF:d.fcff}))}>
-              <CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="t"/><YAxis/><Tooltip/><Legend/>
-              <Bar dataKey="CFO"/><Bar dataKey="CFI"/><Bar dataKey="FCFF"/>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+  <header>
+    <h1>Liasse Fiscale — Tableau de bord</h1>
+    <span class="pill">1 fichier • offline</span>
+  </header>
+  <div class="wrap">
+    <div class="tabs">
+      <div class="tab active" data-tab="dash">Dashboard</div>
+      <div class="tab" data-tab="ratios">Ratios</div>
+      <div class="tab" data-tab="flux">Flux</div>
+      <div class="tab" data-tab="scenarios">Scénarios</div>
+      <div class="tab" data-tab="liasse">Liasse PDF</div>
+      <div class="tab" data-tab="tests">Tests</div>
     </div>
-  );
-}
 
-ReactDOM.createRoot(document.getElementById('app')).render(<App/>);
+    <!-- DASHBOARD -->
+    <section id="dash" class="grid g-3">
+      <div class="panel">
+        <div class="title">Chiffres clés</div>
+        <div id="kpis" class="kpis"></div>
+        <div class="two" style="margin-top:12px">
+          <div class="panel">
+            <div class="title">Évolution CA / EBITDA / Net</div>
+            <svg id="chart1" class="chart" viewBox="0 0 700 300"></svg>
+          </div>
+          <div class="panel">
+            <div class="title">BFR / FRNG / Trésorerie nette</div>
+            <svg id="chart2" class="chart" viewBox="0 0 700 300"></svg>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="title">Importer données</div>
+        <div class="row"><input id="fileCSV" type="file" accept=".csv"/></div>
+        <div class="hint">Colonnes: annee, CA, COGS, OPEX, DandA, interets, impots, stocks, clients, fournisseurs, immoNette, tresorerie, capitauxPropres, dettesLT, dettesCT, capex</div>
+        <div class="title" style="margin-top:14px">Qualité</div>
+        <div id="bullets" class="cards2"></div>
+      </div>
+    </section>
+
+    <!-- RATIOS -->
+    <section id="ratios" class="panel hidden">
+      <div class="title">Ratios détaillés</div>
+      <table id="tblRatios" class="tbl"></table>
+    </section>
+
+    <!-- FLUX -->
+    <section id="flux" class="panel hidden">
+      <div class="title">Flux de trésorerie (indirect)</div>
+      <svg id="chartCash" class="chart" viewBox="0 0 1000 300"></svg>
+      <table id="tblCash" class="tbl" style="margin-top:10px"></table>
+    </section>
+
+    <!-- SCÉNARIOS -->
+    <section id="scenarios" class="panel hidden">
+      <div class="title">Budget et projection N+1</div>
+      <div class="two">
+        <div>
+          <div class="row"><label style="width:140px">Croissance CA</label><input id="s_growth" type="range" min="-0.2" max="0.5" step="0.005" value="0.06"><span id="v_growth" class="pill">6.0%</span></div>
+          <div class="row"><label style="width:140px">Marge EBITDA</label><input id="s_ebitda" type="range" min="0.05" max="0.4" step="0.005" value="0.19"><span id="v_ebitda" class="pill">19.0%</span></div>
+          <div class="row"><label style="width:140px">DSO (j)</label><input id="s_dso" type="range" min="15" max="120" step="1" value="58"><span id="v_dso" class="pill">58</span></div>
+          <div class="row"><label style="width:140px">DIO (j)</label><input id="s_dio" type="range" min="10" max="200" step="1" value="78"><span id="v_dio" class="pill">78</span></div>
+          <div class="row"><label style="width:140px">DPO (j)</label><input id="s_dpo" type="range" min="10" max="150" step="1" value="65"><span id="v_dpo" class="pill">65</span></div>
+          <div class="row"><label style="width:140px">CAPEX (% CA)</label><input id="s_capex" type="range" min="0" max="0.2" step="0.005" value="0.045"><span id="v_capex" class="pill">4.5%</span></div>
+          <div class="row"><label style="width:140px">Taux d'intérêt</label><input id="s_rate" type="range" min="0" max="0.15" step="0.001" value="0.05"><span id="v_rate" class="pill">5.0%</span></div>
+          <div class="row"><label style="width:140px">Taux d'impôt</label><input id="s_tax" type="range" min="0" max="0.4" step="0.005" value="0.28"><span id="v_tax" class="pill">28.0%</span></div>
+          <div class="row"><button id="btnReset" class="outline">Réinitialiser</button></div>
+        </div>
+        <div>
+          <div class="grid" style="grid-template-columns:1fr 1fr; gap:12px">
+            <div class="card"><small>CA projeté</small><div class="value" id="px_ca">—</div></div>
+            <div class="card"><small>EBITDA projeté</small><div class="value" id="px_ebitda">—</div></div>
+            <div class="card"><small>Résultat net projeté</small><div class="value" id="px_net">—</div></div>
+            <div class="card"><small>CFO projeté</small><div class="value" id="px_cfo">—</div></div>
+            <div class="card"><small>FCFF projeté</small><div class="value" id="px_fcff">—</div></div>
+            <div class="card"><small>Budget capex couvert?</small><div class="value" id="px_budget">—</div></div>
+          </div>
+          <div style="margin-top:12px"><svg id="chartProj" class="chart" viewBox="0 0 1000 300"></svg></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LIASSE PDF -->
+    <section id="liasse" class="panel hidden">
+      <div class="title">Visualiser la liasse complète (PDF)</div>
+      <div class="row"><input id="filePDF" type="file" accept="application/pdf"></div>
+      <div id="pdfHolder" style="margin-top:10px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#0e1a31;height:75vh;display:flex;align-items:center;justify-content:center;color:#9fb2d6">Aucun PDF chargé.</div>
+    </section>
+
+    <!-- TESTS -->
+    <section id="tests" class="panel hidden">
+      <div class="title">Tests automatiques</div>
+      <div id="testsOut" class="hint"></div>
+      <table id="tblChecks" class="tbl" style="margin-top:10px"></table>
+    </section>
+  </div>
+
+  <script>
+  // ---------- Helpers ----------
+  function pct(x){return (Math.round(x*1000)/10)+"%"}
+  function fmt(x){return new Intl.NumberFormat('fr-FR',{maximumFractionDigits:0}).format(x)}
+  function clamp(n,a,b){return Math.max(a,Math.min(b,n))}
+  function arrLast(a){return (a&&a.length)?a[a.length-1]:undefined}
+  function parseCSV(txt){
+    const sep = txt.includes(';') && !txt.includes(',') ? ';' : ',';
+    const lines = txt.trim().split(/\r?\n/); if(!lines.length) return [];
+    const H = lines[0].split(sep).map(s=>s.trim());
+    const out=[]; for(let i=1;i<lines.length;i++){ if(!lines[i]) continue; const c=lines[i].split(sep).map(s=>s.trim()); const o={}; H.forEach((k,idx)=>{const v=c[idx]; o[k]=v!==undefined && !Number.isNaN(+v)? +v : v}); out.push(o); }
+    return out;
+  }
+
+  // ---------- Demo ----------
+  const demo=[
+    { annee:2021, CA:1200000, COGS:720000, OPEX:270000, DandA:40000, interets:15000, impots:35000, stocks:160000, clients:210000, fournisseurs:130000, immoNette:360000, tresorerie:60000, capitauxPropres:320000, dettesLT:220000, dettesCT:140000, capex:50000 },
+    { annee:2022, CA:1380000, COGS:816000, OPEX:305000, DandA:42000, interets:18000, impots:42000, stocks:175000, clients:240000, fournisseurs:150000, immoNette:385000, tresorerie:70000, capitauxPropres:360000, dettesLT:240000, dettesCT:150000, capex:65000 },
+    { annee:2023, CA:1530000, COGS:882000, OPEX:330000, DandA:45000, interets:21000, impots:46000, stocks:190000, clients:260000, fournisseurs:165000, immoNette:410000, tresorerie:82000, capitauxPropres:385000, dettesLT:250000, dettesCT:160000, capex:70000 },
+    { annee:2024, CA:1620000, COGS:936000, OPEX:342000, DandA:46000, interets:24000, impots:50000, stocks:205000, clients:280000, fournisseurs:172000, immoNette:420000, tresorerie:90000, capitauxPropres:410000, dettesLT:250000, dettesCT:155000, capex:72000 },
+  ];
+
+  // ---------- Calculs ----------
+  function enrich(r){
+    const gross=r.CA-r.COGS; const ebitda=gross-r.OPEX; const ebit=ebitda-r.DandA; const ebt=ebit-r.interets; const net=ebt-r.impots;
+    const actifCourant=r.stocks+r.clients+r.tresorerie; const passifCourant=r.fournisseurs+r.dettesCT;
+    const totalActif=r.immoNette+actifCourant; const totalPassif=r.capitauxPropres+r.dettesLT+passifCourant;
+    const bfr=r.stocks+r.clients-r.fournisseurs; const frng=r.capitauxPropres+r.dettesLT-r.immoNette; const tn=r.tresorerie-(bfr-frng);
+    return {...r,gross,ebitda,ebit,ebt,net,actifCourant,passifCourant,totalActif,totalPassif,bfr,frng,tn};
+  }
+  function computeAll(rows){
+    const e=rows.map(enrich);
+    for(let i=0;i<e.length;i++){
+      const prev=e[i-1];
+      const dC=prev?e[i].clients-prev.clients:0, dS=prev?e[i].stocks-prev.stocks:0, dF=prev?e[i].fournisseurs-prev.fournisseurs:0;
+      e[i].cfo=e[i].ebitda-dC-dS+dF-e[i].impots; e[i].fcff=e[i].cfo-e[i].capex;
+    }
+    return e;
+  }
+  function ratios(rows){
+    const out=[]; for(let i=0;i<rows.length;i++){
+      const r=rows[i];
+      const current=r.actifCourant/Math.max(1,r.passifCourant); const quick=(r.tresorerie+r.clients)/Math.max(1,r.passifCourant);
+      const leverage=(r.dettesLT+r.dettesCT)/Math.max(1,r.capitauxPropres); const debtEbitda=(r.dettesLT+r.dettesCT)/Math.max(1,r.ebitda);
+      const intCover=r.ebit/Math.max(1,r.interets); const roa=r.net/Math.max(1,r.totalActif); const assetTurn=r.CA/Math.max(1,r.totalActif); const equityMult=r.totalActif/Math.max(1,r.capitauxPropres); const roe=roa*equityMult;
+      const dso=r.clients/Math.max(1,r.CA)*365; const dio=r.stocks/Math.max(1,r.COGS)*365; const dpo=r.fournisseurs/Math.max(1,r.COGS)*365; const ccc=dso+dio-dpo;
+      function light(val, low, high){ return val>=high? 'ok' : (val>=low? 'warn':'bad'); }
+      out.push({annee:r.annee, marginEbitda:r.ebitda/r.CA, marginNet:r.net/r.CA, quick,current,leverage,debtEbitda,intCover,roe,ccc,
+        l_quick: light(quick,1.0,1.2), l_lev: light(1/Math.max(0.01,leverage),0.25,0.4), l_cov: light(intCover,2,4), l_de: light(1/Math.max(0.01,debtEbitda),0.33,0.5)});
+    }
+    return out;
+  }
+
+  // ---------- SVG ----------
+  function svgEl(tag,attrs){const n=document.createElementNS('http://www.w3.org/2000/svg',tag); for(const k in attrs)n.setAttribute(k,attrs[k]); return n}
+  function drawAxes(svg,w,h,p){svg.innerHTML=''; svg.appendChild(svgEl('rect',{x:0,y:0,width:w,height:h,fill:'none',stroke:'#21304f'})); for(let i=0;i<5;i++){const y=p+(h-2*p)*i/4; svg.appendChild(svgEl('line',{x1:p,y1:y,x2:w-p,y2:y,stroke:'#233453','stroke-dasharray':'3 3'}))} return {w,h,p}}
+  function scale(v,a1,a2,b1,b2){return b1 + ((v-a1)*(b2-b1)/(a2-a1 || 1))}
+  function addLegend(svg, labels, colors){const g=svgEl('g',{transform:'translate(46,22)'}); labels.forEach((l,i)=>{const y=i*16; g.appendChild(svgEl('rect',{x:0,y:y-9,width:14,height:4,fill:colors[i]})); const t=svgEl('text',{x:20,y:y,fill:'#cbd5e1','font-size':'12'}); t.textContent=l; g.appendChild(t)}); svg.appendChild(g)}
+  function lineSeries(svg, rows, xKey, yKeys, colors){ if(!rows.length){svg.innerHTML='';return} const vb=svg.viewBox.baseVal; const {w,h,p}=drawAxes(svg,vb.width,vb.height,40); const xs=rows.map(r=>r[xKey]); const xMin=Math.min(...xs), xMax=Math.max(...xs); const ys=[]; yKeys.forEach(k=>rows.forEach(r=>ys.push(r[k]))); let yMin=Math.min(...ys), yMax=Math.max(...ys); if(yMin===yMax){yMin*=0.9; yMax*=1.1} yKeys.forEach((k,ki)=>{ let d=''; for(let i=0;i<rows.length;i++){ const r=rows[i]; const x=scale(r[xKey],xMin,xMax,p,w-p); const y=scale(r[k],yMin,yMax,h-p,p); d+=(i?' L':'M')+x+','+y } svg.appendChild(svgEl('path',{d,fill:'none',stroke:colors[ki%colors.length],'stroke-width':2})) }); addLegend(svg,yKeys,colors) }
+  function barGroups(svg, rows, xKey, yKeys, colors){ if(!rows.length){svg.innerHTML='';return} const vb=svg.viewBox.baseVal; const {w,h,p}=drawAxes(svg,vb.width,vb.height,40); const xs=rows.map(r=>r[xKey]); const xMin=Math.min(...xs), xMax=Math.max(...xs); const ys=[0]; yKeys.forEach(k=>rows.forEach(r=>ys.push(r[k]))); let yMin=Math.min(...ys), yMax=Math.max(...ys); if(yMin===yMax){yMin=0; yMax=yMax||1} const band=(w-2*p)/rows.length; const barW=band/(yKeys.length+0.5); for(let ri=0;ri<rows.length;ri++){ const r=rows[ri]; for(let ki=0;ki<yKeys.length;ki++){ const k=yKeys[ki]; const x=p+ri*band+ki*barW; const y0=scale(0,yMin,yMax,h-p,p); const y=scale(r[k],yMin,yMax,h-p,p); const yTop=Math.min(y,y0), H=Math.abs(y-y0); svg.appendChild(svgEl('rect',{x:x,y:yTop,width:barW-2,height:H,fill:colors[ki%colors.length]})) } } addLegend(svg,yKeys,colors) }
+
+  // ---------- Rendu ----------
+  function trHead(cols){ const thead=document.createElement('thead'); const tr=document.createElement('tr'); cols.forEach(h=>{ const th=document.createElement('th'); th.textContent=h; tr.appendChild(th) }); thead.appendChild(tr); return thead }
+  function trRow(cols){ const tr=document.createElement('tr'); cols.forEach(v=>{ const td=document.createElement('td'); td.textContent=v; tr.appendChild(td) }); return tr }
+
+  function render(all){
+    if(!all || !all.length){ document.getElementById('kpis').innerHTML='<div class="hint">Aucune donnée</div>'; return }
+    const data=computeAll(all); const R=ratios(data); const L=arrLast(data); const RR=arrLast(R);
+
+    // KPIs
+    const KP=[["Chiffre d'affaires", '€ '+fmt(L.CA)],['EBITDA', '€ '+fmt(L.ebitda)+' ('+pct(L.ebitda/L.CA)+')'],['Résultat net', '€ '+fmt(L.net)+' ('+pct(L.net/L.CA)+')'],['Dette/EBITDA', ((L.dettesLT+L.dettesCT)/Math.max(1,L.ebitda)).toFixed(2)+'x'],['Quick ratio', RR.quick.toFixed(2)],['Leverage', RR.leverage.toFixed(2)+'x'],['ROE', (RR.roe*100).toFixed(1)+'%'],['CCC', RR.ccc.toFixed(0)+' j']];
+    const k=document.getElementById('kpis'); k.innerHTML=''; for(let i=0;i<KP.length;i++){ const c=document.createElement('div'); c.className='card'; c.innerHTML='<small>'+KP[i][0]+'</small><div class="value">'+KP[i][1]+'</div>'; k.appendChild(c) }
+
+    // Bullets
+    const bx=document.getElementById('bullets'); if(bx){ bx.innerHTML=''; function bullet(name, val, cls){ const d=document.createElement('div'); d.className='card'; d.innerHTML='<small>'+name+'</small><div><span class="pill '+cls+'">'+val+'</span></div>'; bx.appendChild(d) } bullet('Liquidité rapide', RR.quick.toFixed(2), RR.l_quick); bullet('Levier acceptable', RR.leverage.toFixed(2)+'x', RR.l_lev); bullet('Couverture intérêts', RR.intCover.toFixed(1)+'x', RR.l_cov); bullet('Dette/EBITDA', RR.debtEbitda.toFixed(2)+'x', RR.l_de) }
+
+    // Charts
+    lineSeries(document.getElementById('chart1'), data.map(d=>({annee:d.annee, CA:d.CA, EBITDA:d.ebitda, Net:d.net})), 'annee', ['CA','EBITDA','Net'], [getComputedStyle(document.documentElement).getPropertyValue('--c1').trim()||'#60a5fa', getComputedStyle(document.documentElement).getPropertyValue('--c2').trim()||'#22c55e', getComputedStyle(document.documentElement).getPropertyValue('--c3').trim()||'#f97316']);
+    barGroups(document.getElementById('chart2'), data.map(d=>({annee:d.annee, BFR:d.bfr, FRNG:d.frng, TN:d.tn})), 'annee', ['BFR','FRNG','TN'], [getComputedStyle(document.documentElement).getPropertyValue('--c1').trim()||'#60a5fa', getComputedStyle(document.documentElement).getPropertyValue('--c2').trim()||'#22c55e', getComputedStyle(document.documentElement).getPropertyValue('--c3').trim()||'#f97316']);
+
+    // Ratios table
+    const rt=document.getElementById('tblRatios'); if(rt){ rt.innerHTML=''; const head=['Année','EBITDA%','Net%','Quick','Current','Leverage','Dette/EBITDA','Cover','ROE','CCC']; rt.appendChild(trHead(head)); const rtb=document.createElement('tbody'); for(let i=0;i<R.length;i++){ const x=R[i]; rtb.appendChild(trRow([x.annee,(x.marginEbitda*100).toFixed(1)+'%',(x.marginNet*100).toFixed(1)+'%',x.quick.toFixed(2),x.current.toFixed(2),x.leverage.toFixed(2)+'x',x.debtEbitda.toFixed(2)+'x',x.intCover.toFixed(1)+'x',(x.roe*100).toFixed(1)+'%',x.ccc.toFixed(0)])) } rt.appendChild(rtb) }
+
+    // Cash
+    const crows=data.map(d=>({annee:d.annee,CFO:d.cfo,CFI:-d.capex,FCFF:d.fcff})); const cashSvg=document.getElementById('chartCash'); if(cashSvg){ barGroups(cashSvg, crows, 'annee', ['CFO','CFI','FCFF'], [getComputedStyle(document.documentElement).getPropertyValue('--c1').trim()||'#60a5fa', '#ef4444', getComputedStyle(document.documentElement).getPropertyValue('--c2').trim()||'#22c55e']) }
+    const ct=document.getElementById('tblCash'); if(ct){ ct.innerHTML=''; ct.appendChild(trHead(['Année','CFO','CFI (CAPEX)','FCFF'])); const ctb=document.createElement('tbody'); for(let i=0;i<crows.length;i++){ const r=crows[i]; ctb.appendChild(trRow([r.annee,'€ '+fmt(r.CFO),'€ '+fmt(r.CFI),'€ '+fmt(r.FCFF)])) } ct.appendChild(ctb) }
+
+    // Scénarios
+    currentData = data; updateScenario();
+
+    // Tests
+    runTests(data);
+  }
+
+  // ---------- Scénarios ----------
+  function updateScenario(){
+    const data=currentData || [];
+    if(!data.length) return; const base=arrLast(data);
+    const growth=+document.getElementById('s_growth').value; const mE=+document.getElementById('s_ebitda').value; const dso=+document.getElementById('s_dso').value; const dio=+document.getElementById('s_dio').value; const dpo=+document.getElementById('s_dpo').value; const capexPct=+document.getElementById('s_capex').value; const rate=+document.getElementById('s_rate').value; const tax=+document.getElementById('s_tax').value;
+    document.getElementById('v_growth').textContent=pct(growth); document.getElementById('v_ebitda').textContent=pct(mE); document.getElementById('v_dso').textContent=dso; document.getElementById('v_dio').textContent=dio; document.getElementById('v_dpo').textContent=dpo; document.getElementById('v_capex').textContent=pct(capexPct); document.getElementById('v_rate').textContent=pct(rate); document.getElementById('v_tax').textContent=pct(tax);
+    const CA=Math.round(base.CA*(1+growth)); const ebitda=Math.round(CA*mE); const COGS=Math.round(CA - ebitda - base.OPEX); const OPEX=base.OPEX; const DandA=Math.round(base.DandA*1.04); const interets=Math.round((base.dettesLT+base.dettesCT)*rate); const impots=Math.max(0, Math.round((ebitda - DandA - interets)*tax)); const clients=Math.round((CA/365)*dso); const stocks=Math.round(((COGS||base.COGS)/365)*dio); const fournisseurs=Math.round(((COGS||base.COGS)/365)*dpo); const capex=Math.round(CA*capexPct);
+    const proj=enrich({ annee: base.annee+1, CA, COGS, OPEX, DandA, interets, impots, stocks, clients, fournisseurs, immoNette: Math.max(0, base.immoNette + capex - DandA), tresorerie: base.tresorerie, capitauxPropres: base.capitauxPropres + Math.round((ebitda - DandA - interets - impots)), dettesLT: base.dettesLT, dettesCT: base.dettesCT, capex }); const dC=clients-base.clients, dS=stocks-base.stocks, dF=fournisseurs-base.fournisseurs; proj.cfo=ebitda - dC - dS + dF - impots; proj.fcff=proj.cfo - capex; proj.tresorerie=base.tresorerie + proj.fcff;
+    function setTxt(id, val){const el=document.getElementById(id); if(el) el.textContent=val}
+    setTxt('px_ca','€ '+fmt(CA)); setTxt('px_ebitda','€ '+fmt(ebitda)+' ('+pct(ebitda/CA)+')'); setTxt('px_net','€ '+fmt(proj.net)); setTxt('px_cfo','€ '+fmt(proj.cfo)); setTxt('px_fcff','€ '+fmt(proj.fcff)); document.getElementById('px_budget').innerHTML='<span class="pill '+(proj.cfo>=capex?'ok':'bad')+'">'+(proj.cfo>=capex?'Couvert':'Non couvert')+'</span>';
+    const rows=[ {annee: base.annee-1, CA: (data.length>1?data[data.length-2].CA:base.CA), EBITDA:(data.length>1?data[data.length-2].ebitda:base.ebitda), Net:(data.length>1?data[data.length-2].net:base.net)}, {annee: base.annee, CA: base.CA, EBITDA:base.ebitda, Net:base.net}, {annee: proj.annee, CA: proj.CA, EBITDA: proj.ebitda, Net: proj.net} ];
+    lineSeries(document.getElementById('chartProj'), rows, 'annee', ['CA','EBITDA','Net'], [getComputedStyle(document.documentElement).getPropertyValue('--c1').trim()||'#60a5fa', getComputedStyle(document.documentElement).getPropertyValue('--c2').trim()||'#22c55e', getComputedStyle(document.documentElement).getPropertyValue('--c3').trim()||'#f97316']);
+  }
+
+  // ---------- PDF viewer ----------
+  (function(){const inp=document.getElementById('filePDF'); if(!inp) return; inp.addEventListener('change',function(e){const f=e.target.files && e.target.files[0]; if(!f) return; const url=URL.createObjectURL(f); const holder=document.getElementById('pdfHolder'); holder.innerHTML=''; const emb=document.createElement('embed'); emb.src=url; emb.type='application/pdf'; emb.style='width:100%;height:100%'; holder.appendChild(emb)})})();
+
+  // ---------- CSV upload ----------
+  (function(){const inp=document.getElementById('fileCSV'); if(!inp) return; inp.addEventListener('change',function(e){const f=e.target.files && e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=function(){try{ const arr=parseCSV(String(r.result)).map(o=>({...o,annee:+o.annee})); currentRows=arr; currentData=computeAll(currentRows); render(currentRows) }catch(err){ alert('CSV invalide') }}; r.readAsText(f)})})();
+
+  // ---------- Tabs ----------
+  (function(){const tabs=document.querySelectorAll('.tab'); const secs=document.querySelectorAll('section'); tabs.forEach(function(t){ t.addEventListener('click',function(){ tabs.forEach(function(x){x.classList.remove('active')}); t.classList.add('active'); secs.forEach(function(s){s.classList.add('hidden')}); const id=t.getAttribute('data-tab'); const sec=document.getElementById(id); if(sec) sec.classList.remove('hidden'); })})})();
+
+  // ---------- Tests ----------
+  function runTests(data){
+    const out=document.getElementById('testsOut'); const tbl=document.getElementById('tblChecks');
+    const tests=[]; let ok=0,ko=0;
+    for(let i=0;i<data.length;i++){
+      const d=data[i];
+      tests.push({annee:d.annee,name:'EBITDA = CA-COGS-OPEX', pass: Math.abs(d.ebitda - (d.CA-d.COGS-d.OPEX))<1e-6});
+      tests.push({annee:d.annee,name:'FCFF = CFO - CAPEX', pass: Math.abs(d.fcff - (d.cfo - d.capex))<1e-6});
+      const lhs=d.totalActif, rhs=d.totalPassif; const tol=0.05*Math.max(1,lhs,rhs);
+      tests.push({annee:d.annee,name:'Actif ≈ Passif (±5%)', pass: Math.abs(lhs-rhs)<=tol});
+      // nouveaux tests
+      tests.push({annee:d.annee,name:'Marge EBITDA entre -100% et 100%', pass: Math.abs(d.ebitda/Math.max(1,d.CA))<=1});
+      tests.push({annee:d.annee,name:'Quick ratio défini', pass: Number.isFinite((d.tresorerie+d.clients)/Math.max(1,d.passifCourant))});
+      tests.push({annee:d.annee,name:'CCC défini', pass: Number.isFinite(d.clients/Math.max(1,d.CA)*365 + d.stocks/Math.max(1,d.COGS)*365 - d.fournisseurs/Math.max(1,d.COGS)*365)});
+    }
+    tests.forEach(function(t){ t.pass?ok++:ko++ });
+    if(out) out.textContent=ok+' tests OK, '+ko+' en échec';
+    if(tbl){ tbl.innerHTML=''; tbl.appendChild(trHead(['Année','Test','Résultat'])); const tb=document.createElement('tbody'); for(let i=0;i<tests.length;i++){ const t=tests[i]; tb.appendChild(trRow([t.annee,t.name, t.pass?'OK':'KO'])) } tbl.appendChild(tb) }
+  }
+
+  // ---------- Boot ----------
+  var currentRows = demo.slice();
+  var currentData = computeAll(currentRows);
+  render(currentRows);
+  // Scénarios listeners
+  (function(){ const ids=['growth','ebitda','dso','dio','dpo','capex','rate','tax']; for(let i=0;i<ids.length;i++){ const el=document.getElementById('s_'+ids[i]); if(el){ el.addEventListener('input', updateScenario) } } const btn=document.getElementById('btnReset'); if(btn){ btn.addEventListener('click',function(){ s_growth.value=0.06; s_ebitda.value=0.19; s_dso.value=58; s_dio.value=78; s_dpo.value=65; s_capex.value=0.045; s_rate.value=0.05; s_tax.value=0.28; updateScenario() }) } })();
   </script>
 </body>
 </html>
