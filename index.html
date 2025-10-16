@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Analyse Liasse Fiscale — 1 fichier</title>
+  <style>
+    :root{--bg:#0f172a;--panel:#111827;--ink:#e5e7eb;--muted:#9ca3af;--ok:#10b981;--bad:#ef4444}
+    *{box-sizing:border-box} body{margin:0;background:#0b1220;color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto}
+    header{padding:16px 20px;background:#0f172a;border-bottom:1px solid #1f2937}
+    h1{font-size:18px;margin:0} .wrap{max-width:1200px;margin:auto;padding:20px;}
+    .grid{display:grid;gap:16px} .g-3{grid-template-columns:2fr 1fr} .panel{background:var(--panel);border:1px solid #1f2937;border-radius:14px;padding:14px}
+    .kpis{display:grid;gap:10px;grid-template-columns:repeat(4,minmax(0,1fr))}
+    .kpi{background:#0f172a;border:1px solid #1f2937;border-radius:12px;padding:10px}
+    .kpi small{color:var(--muted);display:block;margin-bottom:4px}
+    .flex{display:flex;gap:10px;align-items:center}
+    label{font-size:12px;color:var(--muted)} input[type=file]{width:100%}
+    .tbl{width:100%;border-collapse:collapse} .tbl th,.tbl td{padding:8px 10px;border-bottom:1px solid #1f2937;text-align:right}
+    .tbl th:first-child,.tbl td:first-child{text-align:left}
+    .badge{padding:2px 8px;border-radius:999px;border:1px solid #334155;color:#cbd5e1;font-size:12px}
+    .ok{background:#052e24;border-color:#064e3b;color:#a7f3d0} .bad{background:#3b0a0a;border-color:#7f1d1d;color:#fecaca}
+    .controls .row{margin-bottom:10px}
+    .row input[type=range]{width:100%}
+    .hint{color:#9ca3af;font-size:12px}
+    .title{font-weight:600;margin:0 0 8px 0;font-size:14px}
+  </style>
+  <!-- React + Babel + Recharts UMD -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+  <script src="https://unpkg.com/recharts/umd/Recharts.min.js"></script>
+</head>
+<body>
+  <header><div class="wrap"><h1>Analyse Liasse Fiscale — site 1 fichier</h1></div></header>
+  <div id="app" class="wrap"></div>
+
+  <script type="text/babel">
+const {useMemo,useState,useEffect,useRef} = React;
+const {AreaChart,Area,LineChart,Line,BarChart,Bar,XAxis,YAxis,CartesianGrid,Tooltip,Legend,ResponsiveContainer} = Recharts;
+
+const demo=[
+  { annee:2021, CA:1200000, COGS:720000, OPEX:270000, DandA:40000, interets:15000, impots:35000, stocks:160000, clients:210000, fournisseurs:130000, immoNette:360000, tresorerie:60000, capitauxPropres:320000, dettesLT:220000, dettesCT:140000, capex:50000 },
+  { annee:2022, CA:1380000, COGS:816000, OPEX:305000, DandA:42000, interets:18000, impots:42000, stocks:175000, clients:240000, fournisseurs:150000, immoNette:385000, tresorerie:70000, capitauxPropres:360000, dettesLT:240000, dettesCT:150000, capex:65000 },
+  { annee:2023, CA:1530000, COGS:882000, OPEX:330000, DandA:45000, interets:21000, impots:46000, stocks:190000, clients:260000, fournisseurs:165000, immoNette:410000, tresorerie:82000, capitauxPropres:385000, dettesLT:250000, dettesCT:160000, capex:70000 },
+  { annee:2024, CA:1620000, COGS:936000, OPEX:342000, DandA:46000, interets:24000, impots:50000, stocks:205000, clients:280000, fournisseurs:172000, immoNette:420000, tresorerie:90000, capitauxPropres:410000, dettesLT:250000, dettesCT:155000, capex:72000 },
+];
+
+// helpers
+const pct = (x)=> (Math.round(x*1000)/10)+"%"; const fmt=(x)=> new Intl.NumberFormat('fr-FR').format(x);
+function enrich(r){
+  const gross=r.CA-r.COGS; const ebitda=gross-r.OPEX; const ebit=ebitda-r.DandA; const ebt=ebit-r.interets; const net=ebt-r.impots;
+  const actifCourant=r.stocks+r.clients+r.tresorerie; const passifCourant=r.fournisseurs+r.dettesCT;
+  const totalActif=r.immoNette+actifCourant; const totalPassif=r.capitauxPropres+r.dettesLT+passifCourant;
+  const bfr=r.stocks+r.clients-r.fournisseurs; const frng=r.capitauxPropres+r.dettesLT-r.immoNette; const tn=r.tresorerie-(bfr-frng);
+  return {...r,gross,ebitda,ebit,ebt,net,actifCourant,passifCourant,totalActif,totalPassif,bfr,frng,tn};
+}
+function computeAll(rows){
+  const e=rows.map(enrich);
+  for(let i=0;i<e.length;i++){
+    const prev=e[i-1];
+    const dC=prev?e[i].clients-prev.clients:0; const dS=prev?e[i].stocks-prev.stocks:0; const dF=prev?e[i].fournisseurs-prev.fournisseurs:0;
+    e[i].cfo=e[i].ebitda-dC-dS+dF-e[i].impots; e[i].fcff=e[i].cfo-e[i].capex;
+  }
+  return e;
+}
+function ratios(rows){
+  return rows.map(r=>{
+    const current=r.actifCourant/Math.max(1,r.passifCourant); const quick=(r.tresorerie+r.clients)/Math.max(1,r.passifCourant);
+    const leverage=(r.dettesLT+r.dettesCT)/Math.max(1,r.capitauxPropres); const debtEbitda=(r.dettesLT+r.dettesCT)/Math.max(1,r.ebitda);
+    const intCover=r.ebit/Math.max(1,r.interets); const roa=r.net/Math.max(1,r.totalActif); const assetTurn=r.CA/Math.max(1,r.totalActif); const equityMult=r.totalActif/Math.max(1,r.capitauxPropres); const roe=roa*equityMult;
+    const dso=r.clients/Math.max(1,r.CA)*365; const dio=r.stocks/Math.max(1,r.COGS)*365; const dpo=r.fournisseurs/Math.max(1,r.COGS)*365; const ccc=dso+dio-dpo;
+    return {annee:r.annee, marginEbitda:r.ebitda/r.CA, marginNet:r.net/r.CA, quick,current,leverage,debtEbitda,intCover,roe,ccc, assetTurn,equityMult};
+  });
+}
+function parseCSV(txt){
+  const sep = txt.includes(';') && !txt.includes(',') ? ';' : ',';
+  const [h,...rows]=txt.trim().split(/\r?\n/); const H=h.split(sep).map(s=>s.trim());
+  return rows.map(r=>{const c=r.split(sep).map(s=>s.trim()); const o={}; H.forEach((k,i)=>o[k]=isNaN(+c[i])?c[i]:+c[i]); return o;});
+}
+
+function App(){
+  const [rows,setRows]=useState(demo);
+  const data=useMemo(()=>computeAll(rows),[rows]);
+  const R=useMemo(()=>ratios(data),[data]);
+  const last=data[data.length-1]; const rr=R[R.length-1]||{};
+
+  function onCSV(e){
+    const f=e.target.files?.[0]; if(!f) return; const reader=new FileReader();
+    reader.onload=()=>{ try{ const arr=parseCSV(String(reader.result)); setRows(arr.map(o=>({...o,annee:+o.annee}))); }catch{ alert('CSV invalide'); } };
+    reader.readAsText(f);
+  }
+
+  return (
+    <div className="grid g-3">
+      <div className="panel">
+        <div className="title">Synthèse</div>
+        <div className="kpis">
+          <div className="kpi"><small>CA</small><div>€ {fmt(last.CA)}</div></div>
+          <div className="kpi"><small>EBITDA</small><div>€ {fmt(last.ebitda)} ({pct(last.ebitda/last.CA)})</div></div>
+          <div className="kpi"><small>Résultat net</small><div>€ {fmt(last.net)} ({pct(last.net/last.CA)})</div></div>
+          <div className="kpi"><small>Dette/EBITDA</small><div>{((last.dettesLT+last.dettesCT)/Math.max(1,last.ebitda)).toFixed(2)}x</div></div>
+          <div className="kpi"><small>Quick</small><div>{(rr.quick||0).toFixed(2)}</div></div>
+          <div className="kpi"><small>Leverage</small><div>{(rr.leverage||0).toFixed(2)}x</div></div>
+          <div className="kpi"><small>ROE</small><div>{((rr.roe||0)*100).toFixed(1)}%</div></div>
+          <div className="kpi"><small>CCC</small><div>{(rr.ccc||0).toFixed(0)} j</div></div>
+        </div>
+
+        <div className="grid" style={{gridTemplateColumns:'1fr 1fr', marginTop:12, gap:16}}>
+          <div className="panel" style={{background:'#0f172a'}}>
+            <div className="title">Résultats</div>
+            <div style={{height:260}}>
+              <ResponsiveContainer>
+                <LineChart data={data.map(d=>({t:d.annee, CA:d.CA, EBITDA:d.ebitda, Net:d.net}))}>
+                  <CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="t"/><YAxis/><Tooltip/><Legend/>
+                  <Line type="monotone" dataKey="CA" dot={false}/>
+                  <Line type="monotone" dataKey="EBITDA" dot={false}/>
+                  <Line type="monotone" dataKey="Net" dot={false}/>
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="panel" style={{background:'#0f172a'}}>
+            <div className="title">BFR / FRNG / Trésorerie nette</div>
+            <div style={{height:260}}>
+              <ResponsiveContainer>
+                <BarChart data={data.map(d=>({t:d.annee, BFR:d.bfr, FRNG:d.frng, TN:d.tn}))}>
+                  <CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="t"/><YAxis/><Tooltip/><Legend/>
+                  <Bar dataKey="BFR"/><Bar dataKey="FRNG"/><Bar dataKey="TN"/>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="title">Données</div>
+        <div className="controls">
+          <div className="row"><label>Importer CSV</label><input type="file" accept=".csv" onChange={onCSV}/></div>
+          <div className="hint">Colonnes: annee, CA, COGS, OPEX, DandA, interets, impots, stocks, clients, fournisseurs, immoNette, tresorerie, capitauxPropres, dettesLT, dettesCT, capex</div>
+        </div>
+        <div className="title" style={{marginTop:12}}>Ratios clés</div>
+        <table className="tbl">
+          <thead>
+            <tr><th>Année</th><th>EBITDA%</th><th>Net%</th><th>Quick</th><th>Leverage</th><th>Dette/EBITDA</th><th>Cover</th><th>ROE</th><th>CCC</th></tr>
+          </thead>
+          <tbody>
+            {R.map(x=> (
+              <tr key={x.annee}>
+                <td style={{textAlign:'left'}}>{x.annee}</td>
+                <td>{(x.marginEbitda*100).toFixed(1)}%</td>
+                <td>{(x.marginNet*100).toFixed(1)}%</td>
+                <td>{x.quick.toFixed(2)}</td>
+                <td>{x.leverage.toFixed(2)}x</td>
+                <td>{x.debtEbitda.toFixed(2)}x</td>
+                <td>{x.intCover.toFixed(1)}x</td>
+                <td>{(x.roe*100).toFixed(1)}%</td>
+                <td>{x.ccc.toFixed(0)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="title" style={{marginTop:12}}>Flux de trésorerie (indirect)</div>
+        <div style={{height:240}}>
+          <ResponsiveContainer>
+            <BarChart data={data.map(d=>({t:d.annee, CFO:d.cfo, CFI:-d.capex, FCFF:d.fcff}))}>
+              <CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="t"/><YAxis/><Tooltip/><Legend/>
+              <Bar dataKey="CFO"/><Bar dataKey="CFI"/><Bar dataKey="FCFF"/>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('app')).render(<App/>);
+  </script>
+</body>
+</html>
