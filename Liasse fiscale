@@ -1,427 +1,181 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Activity, LineChart as Lc, Banknote, BarChart3, ArrowLeftRight, ShieldAlert, TrendingUp, Wallet, Building2, Layers } from "lucide-react";
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RTooltip,
-  Legend,
-  BarChart,
-  Bar,
-} from "recharts";
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Analyse Liasse Fiscale — 1 fichier</title>
+  <style>
+    :root{--bg:#0f172a;--panel:#111827;--ink:#e5e7eb;--muted:#9ca3af;--ok:#10b981;--bad:#ef4444}
+    *{box-sizing:border-box} body{margin:0;background:#0b1220;color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto}
+    header{padding:16px 20px;background:#0f172a;border-bottom:1px solid #1f2937}
+    h1{font-size:18px;margin:0} .wrap{max-width:1200px;margin:auto;padding:20px;}
+    .grid{display:grid;gap:16px} .g-3{grid-template-columns:2fr 1fr} .panel{background:var(--panel);border:1px solid #1f2937;border-radius:14px;padding:14px}
+    .kpis{display:grid;gap:10px;grid-template-columns:repeat(4,minmax(0,1fr))}
+    .kpi{background:#0f172a;border:1px solid #1f2937;border-radius:12px;padding:10px}
+    .kpi small{color:var(--muted);display:block;margin-bottom:4px}
+    .flex{display:flex;gap:10px;align-items:center}
+    label{font-size:12px;color:var(--muted)} input[type=file]{width:100%}
+    .tbl{width:100%;border-collapse:collapse} .tbl th,.tbl td{padding:8px 10px;border-bottom:1px solid #1f2937;text-align:right}
+    .tbl th:first-child,.tbl td:first-child{text-align:left}
+    .badge{padding:2px 8px;border-radius:999px;border:1px solid #334155;color:#cbd5e1;font-size:12px}
+    .ok{background:#052e24;border-color:#064e3b;color:#a7f3d0} .bad{background:#3b0a0a;border-color:#7f1d1d;color:#fecaca}
+    .controls .row{margin-bottom:10px}
+    .row input[type=range]{width:100%}
+    .hint{color:#9ca3af;font-size:12px}
+    .title{font-weight:600;margin:0 0 8px 0;font-size:14px}
+  </style>
+  <!-- React + Babel + Recharts UMD -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+  <script src="https://unpkg.com/recharts/umd/Recharts.min.js"></script>
+</head>
+<body>
+  <header><div class="wrap"><h1>Analyse Liasse Fiscale — site 1 fichier</h1></div></header>
+  <div id="app" class="wrap"></div>
 
-/**
- * Simulateur Quant Financier — Portefeuille multi‑actifs
- *
- * - 3 actifs (EQ actions, FI obligations, CM matières premières)
- * - Génération de rendements corrélés par régime (normal, inflation, crise)
- * - Stratégie Risk Parity + Ciblage de volatilité + effet de levier borné
- * - Rééquilibrage périodique, coûts de transaction, turnover
- * - Métriques: PnL, DD max, Sharpe, VaR95, bêta marché
- * - Flux d'ordres vers Broker/Exchange (diagramme animé)
- */
+  <script type="text/babel">
+const {useMemo,useState,useEffect,useRef} = React;
+const {AreaChart,Area,LineChart,Line,BarChart,Bar,XAxis,YAxis,CartesianGrid,Tooltip,Legend,ResponsiveContainer} = Recharts;
 
-// --- utilitaires ---
-const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
-const ema = (prev, x, k) => prev == null ? x : prev * (1 - k) + k * x;
-const quantile = (arr, q) => {
-  if (!arr.length) return 0;
-  const a = [...arr].sort((x, y) => x - y);
-  const p = clamp(q, 0, 1) * (a.length - 1);
-  const i = Math.floor(p), f = p - i;
-  return a[i] * (1 - f) + a[Math.min(a.length - 1, i + 1)] * f;
-};
-
-// Cholesky 3x3 simple
-function chol3(c) {
-  const L = [[0,0,0],[0,0,0],[0,0,0]];
-  L[0][0] = Math.sqrt(c[0][0]);
-  L[1][0] = c[1][0] / L[0][0];
-  L[1][1] = Math.sqrt(c[1][1] - L[1][0]*L[1][0]);
-  L[2][0] = c[2][0] / L[0][0];
-  L[2][1] = (c[2][1] - L[2][0]*L[1][0]) / L[1][1];
-  L[2][2] = Math.sqrt(c[2][2] - L[2][0]*L[2][0] - L[2][1]*L[2][1]);
-  return L;
-}
-
-function mvn3(cov) {
-  const L = chol3(cov);
-  const z = [randn(), randn(), randn()];
-  return [
-    L[0][0]*z[0],
-    L[1][0]*z[0] + L[1][1]*z[1],
-    L[2][0]*z[0] + L[2][1]*z[1] + L[2][2]*z[2],
-  ];
-}
-
-function randn() {
-  let u=0, v=0; while(!u) u=Math.random(); while(!v) v=Math.random();
-  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
-}
-
-// --- Régimes de marché ---
-const REGIMES = {
-  normal: {
-    vols: { EQ: 0.15, FI: 0.06, CM: 0.12 },
-    corr: [[1.0, -0.2, 0.3],[ -0.2, 1.0, 0.0],[0.3, 0.0, 1.0]],
-    drift: { EQ: 0.06, FI: 0.02, CM: 0.03 },
-  },
-  inflation: {
-    vols: { EQ: 0.18, FI: 0.10, CM: 0.22 },
-    corr: [[1.0, -0.4, 0.35],[ -0.4, 1.0, -0.15],[0.35, -0.15, 1.0]],
-    drift: { EQ: 0.03, FI: -0.01, CM: 0.05 },
-  },
-  crise: {
-    vols: { EQ: 0.35, FI: 0.15, CM: 0.28 },
-    corr: [[1.0, 0.2, 0.6],[ 0.2, 1.0, 0.3],[0.6, 0.3, 1.0]],
-    drift: { EQ: -0.08, FI: 0.01, CM: -0.03 },
-  }
-};
-
-const ASSETS = ["EQ","FI","CM"]; // Actions, Oblig, Commodities
-
-// Graphe des flux d'ordres
-const NODES = [
-  { id:"cash", label:"Capital", x:80, y:150, kind:"wallet" },
-  { id:"strat", label:"Stratégie", x:280, y:150, kind:"layers" },
-  { id:"broker", label:"Broker", x:500, y:80, kind:"building" },
-  { id:"exch", label:"Exchange", x:720, y:80, kind:"activity" },
-  { id:"cust", label:"Custody", x:500, y:220, kind:"bank" },
-  { id:"mkt", label:"Marchés", x:720, y:220, kind:"chart" },
+const demo=[
+  { annee:2021, CA:1200000, COGS:720000, OPEX:270000, DandA:40000, interets:15000, impots:35000, stocks:160000, clients:210000, fournisseurs:130000, immoNette:360000, tresorerie:60000, capitauxPropres:320000, dettesLT:220000, dettesCT:140000, capex:50000 },
+  { annee:2022, CA:1380000, COGS:816000, OPEX:305000, DandA:42000, interets:18000, impots:42000, stocks:175000, clients:240000, fournisseurs:150000, immoNette:385000, tresorerie:70000, capitauxPropres:360000, dettesLT:240000, dettesCT:150000, capex:65000 },
+  { annee:2023, CA:1530000, COGS:882000, OPEX:330000, DandA:45000, interets:21000, impots:46000, stocks:190000, clients:260000, fournisseurs:165000, immoNette:410000, tresorerie:82000, capitauxPropres:385000, dettesLT:250000, dettesCT:160000, capex:70000 },
+  { annee:2024, CA:1620000, COGS:936000, OPEX:342000, DandA:46000, interets:24000, impots:50000, stocks:205000, clients:280000, fournisseurs:172000, immoNette:420000, tresorerie:90000, capitauxPropres:410000, dettesLT:250000, dettesCT:155000, capex:72000 },
 ];
-const LINKS = [["cash","strat"],["strat","broker"],["broker","exch"],["exch","mkt"],["mkt","cust"],["cust","cash"]];
 
-function NodeGlyph({ kind }){
-  const base = "w-10 h-10 rounded-2xl shadow-md flex items-center justify-center text-white";
-  if(kind==="wallet") return <div className={`${base} bg-slate-800`}><Wallet size={18}/></div>;
-  if(kind==="layers") return <div className={`${base} bg-indigo-700`}><Layers size={18}/></div>;
-  if(kind==="building") return <div className={`${base} bg-cyan-700`}><Building2 size={18}/></div>;
-  if(kind==="activity") return <div className={`${base} bg-emerald-700`}><Activity size={18}/></div>;
-  if(kind==="bank") return <div className={`${base} bg-amber-700`}><Banknote size={18}/></div>;
-  return <div className={`${base} bg-rose-700`}><BarChart3 size={18}/></div>;
+// helpers
+const pct = (x)=> (Math.round(x*1000)/10)+"%"; const fmt=(x)=> new Intl.NumberFormat('fr-FR').format(x);
+function enrich(r){
+  const gross=r.CA-r.COGS; const ebitda=gross-r.OPEX; const ebit=ebitda-r.DandA; const ebt=ebit-r.interets; const net=ebt-r.impots;
+  const actifCourant=r.stocks+r.clients+r.tresorerie; const passifCourant=r.fournisseurs+r.dettesCT;
+  const totalActif=r.immoNette+actifCourant; const totalPassif=r.capitauxPropres+r.dettesLT+passifCourant;
+  const bfr=r.stocks+r.clients-r.fournisseurs; const frng=r.capitauxPropres+r.dettesLT-r.immoNette; const tn=r.tresorerie-(bfr-frng);
+  return {...r,gross,ebitda,ebit,ebt,net,actifCourant,passifCourant,totalActif,totalPassif,bfr,frng,tn};
+}
+function computeAll(rows){
+  const e=rows.map(enrich);
+  for(let i=0;i<e.length;i++){
+    const prev=e[i-1];
+    const dC=prev?e[i].clients-prev.clients:0; const dS=prev?e[i].stocks-prev.stocks:0; const dF=prev?e[i].fournisseurs-prev.fournisseurs:0;
+    e[i].cfo=e[i].ebitda-dC-dS+dF-e[i].impots; e[i].fcff=e[i].cfo-e[i].capex;
+  }
+  return e;
+}
+function ratios(rows){
+  return rows.map(r=>{
+    const current=r.actifCourant/Math.max(1,r.passifCourant); const quick=(r.tresorerie+r.clients)/Math.max(1,r.passifCourant);
+    const leverage=(r.dettesLT+r.dettesCT)/Math.max(1,r.capitauxPropres); const debtEbitda=(r.dettesLT+r.dettesCT)/Math.max(1,r.ebitda);
+    const intCover=r.ebit/Math.max(1,r.interets); const roa=r.net/Math.max(1,r.totalActif); const assetTurn=r.CA/Math.max(1,r.totalActif); const equityMult=r.totalActif/Math.max(1,r.capitauxPropres); const roe=roa*equityMult;
+    const dso=r.clients/Math.max(1,r.CA)*365; const dio=r.stocks/Math.max(1,r.COGS)*365; const dpo=r.fournisseurs/Math.max(1,r.COGS)*365; const ccc=dso+dio-dpo;
+    return {annee:r.annee, marginEbitda:r.ebitda/r.CA, marginNet:r.net/r.CA, quick,current,leverage,debtEbitda,intCover,roe,ccc, assetTurn,equityMult};
+  });
+}
+function parseCSV(txt){
+  const sep = txt.includes(';') && !txt.includes(',') ? ';' : ',';
+  const [h,...rows]=txt.trim().split(/\r?\n/); const H=h.split(sep).map(s=>s.trim());
+  return rows.map(r=>{const c=r.split(sep).map(s=>s.trim()); const o={}; H.forEach((k,i)=>o[k]=isNaN(+c[i])?c[i]:+c[i]); return o;});
 }
 
-function Arrow({ x1,y1,x2,y2,intensity=0 }){
-  const dx=x2-x1, dy=y2-y1; const len=Math.hypot(dx,dy); const ux=dx/len, uy=dy/len; const off=18;
-  const sx=x1+ux*off, sy=y1+uy*off, ex=x2-ux*off, ey=y2-uy*off; const w=clamp(1+intensity*6,1,8);
-  return (<g>
-    <line x1={sx} y1={sy} x2={ex} y2={ey} strokeWidth={w} stroke="currentColor" className="text-slate-400" strokeLinecap="round"/>
-    <polygon points={`${ex},${ey} ${ex-uy*6-ux*10},${ey+ux*6-uy*10} ${ex+uy*6-ux*10},${ey-ux*6-uy*10}`} fill="currentColor" className="text-slate-400"/>
-  </g>);
-}
+function App(){
+  const [rows,setRows]=useState(demo);
+  const data=useMemo(()=>computeAll(rows),[rows]);
+  const R=useMemo(()=>ratios(data),[data]);
+  const last=data[data.length-1]; const rr=R[R.length-1]||{};
 
-export default function QuantPortfolioSimulator(){
-  // état principal
-  const [running, setRunning] = useState(true);
-  const [regime, setRegime] = useState("normal");
-  const [targetVol, setTargetVol] = useState(0.10); // vol annualisée
-  const [maxLev, setMaxLev] = useState(2.0);
-  const [tcBps, setTcBps] = useState(5); // coût transaction en bps
-  const [rebalanceDays, setRebalanceDays] = useState(5);
-  const [seedShock, setSeedShock] = useState(0); // pour déclencher un choc unique
-
-  // métriques
-  const [series, setSeries] = useState([]); // {t, nav, ret, dd, var95, lev}
-  const [weights, setWeights] = useState({ EQ: 0.34, FI: 0.33, CM: 0.33 });
-  const [lev, setLev] = useState(1.0);
-  const [turnover, setTurnover] = useState(0);
-
-  const [intensity, setIntensity] = useState({});
-  const dayRef = useRef(0);
-  const navRef = useRef(1.0);
-  const retHistRef = useRef([]); // derniers ret port
-  const volaEmaRef = useRef(null);
-  const t0 = useRef(Date.now());
-
-  useEffect(()=>{
-    if(!running) return;
-    const id = setInterval(()=>{
-      dayRef.current += 1;
-      const t = dayRef.current;
-
-      // réglages du régime
-      const cfg = REGIMES[regime];
-      const dt = 1/252; // pas de temps journalier
-      const vols = [cfg.vols.EQ*Math.sqrt(dt), cfg.vols.FI*Math.sqrt(dt), cfg.vols.CM*Math.sqrt(dt)];
-      const cov = [
-        [vols[0]*vols[0], cfg.corr[0][1]*vols[0]*vols[1], cfg.corr[0][2]*vols[0]*vols[2]],
-        [cfg.corr[1][0]*vols[1]*vols[0], vols[1]*vols[1], cfg.corr[1][2]*vols[1]*vols[2]],
-        [cfg.corr[2][0]*vols[2]*vols[0], cfg.corr[2][1]*vols[2]*vols[1], vols[2]*vols[2]],
-      ];
-
-      // choc ponctuel si seedShock > 0
-      const shock = seedShock>0 && t===seedShock ? [ -0.05, 0.01, -0.03 ] : [0,0,0];
-
-      const rnd = mvn3(cov); // rendements centrés
-      const mu = [cfg.drift.EQ*dt, cfg.drift.FI*dt, cfg.drift.CM*dt];
-      const rEQ = mu[0] + rnd[0] + shock[0];
-      const rFI = mu[1] + rnd[1] + shock[1];
-      const rCM = mu[2] + rnd[2] + shock[2];
-
-      // estimation vol port EMA
-      const w = weights; const rP = w.EQ*rEQ + w.FI*rFI + w.CM*rCM;
-      const varInst = rP*rP*252; // approx var annualisée instantanée
-      volaEmaRef.current = ema(volaEmaRef.current, Math.sqrt(varInst), 0.1);
-      const estVol = Math.max(1e-6, volaEmaRef.current || 0.10);
-
-      // levier pour cibler la vol
-      const levTarget = clamp(targetVol/estVol, 0.1, maxLev);
-
-      // rééquilibrage risk parity périodique
-      let wNew = { ...w };
-      if (t % rebalanceDays === 0 || t===1) {
-        const sig = { EQ: Math.sqrt(cov[0][0])*Math.sqrt(252), FI: Math.sqrt(cov[1][1])*Math.sqrt(252), CM: Math.sqrt(cov[2][2])*Math.sqrt(252) };
-        const invVol = { EQ: 1/Math.max(1e-6, sig.EQ), FI: 1/Math.max(1e-6, sig.FI), CM: 1/Math.max(1e-6, sig.CM) };
-        const s = invVol.EQ + invVol.FI + invVol.CM;
-        wNew = { EQ: invVol.EQ/s, FI: invVol.FI/s, CM: invVol.CM/s };
-
-        // coût de transaction sur le turnover
-        const tv = Math.abs(wNew.EQ - w.EQ) + Math.abs(wNew.FI - w.FI) + Math.abs(wNew.CM - w.CM);
-        setTurnover(tv);
-        setWeights(wNew);
-      }
-
-      // coût proportionnel
-      const cost = turnover * (tcBps/10000);
-
-      // retour du portefeuille appliquant le levier
-      const portRet = levTarget * (wNew.EQ*rEQ + wNew.FI*rFI + wNew.CM*rCM) - cost;
-
-      // NAV et stats
-      navRef.current *= (1 + portRet);
-
-      // metrics
-      retHistRef.current.push(portRet);
-      if (retHistRef.current.length > 500) retHistRef.current.shift();
-      const var95 = -quantile(retHistRef.current, 0.05);
-      const nav = navRef.current;
-
-      // drawdown
-      const peak = series.length ? Math.max(...series.map(s=>s.nav)) : Math.max(1, nav);
-      const dd = nav/peak - 1;
-
-      setLev(levTarget);
-      setSeries((old)=>{
-        const arr = old.slice(-240); // ~6 mois de barres
-        return [...arr, { t, nav: +nav.toFixed(5), ret: +portRet.toFixed(5), dd: +dd.toFixed(5), var95: +var95.toFixed(5), lev: +levTarget.toFixed(2) }];
-      });
-
-      // intensité des flux ~ volume d'ordres
-      const inten = {};
-      const volTrade = turnover * Math.abs(levTarget-1+0.0001) + Math.abs(portRet)*50; // heuristique
-      const scale = clamp(volTrade*2,0,1);
-      LINKS.forEach(([a,b])=>{ inten[`${a}-${b}`] = scale; });
-      setIntensity(inten);
-
-    }, 500);
-    return ()=>clearInterval(id);
-  }, [running, regime, targetVol, maxLev, tcBps, rebalanceDays, weights, turnover, seedShock]);
-
-  const routes = useMemo(()=> LINKS.map(([a,b])=>({ a: NODES.find(n=>n.id===a), b: NODES.find(n=>n.id===b), id:`${a}-${b}` })), []);
-
-  const last = series[series.length-1];
-  const pnlPct = last ? (last.nav-1)*100 : 0;
-  const sharpe = useMemo(()=>{
-    const rets = series.map(s=>s.ret);
-    if(rets.length<10) return 0;
-    const m = rets.reduce((a,b)=>a+b,0)/rets.length;
-    const sd = Math.sqrt(rets.reduce((a,b)=>a+(b-m)*(b-m),0)/Math.max(1,rets.length-1));
-    return (m*252)/(sd*Math.sqrt(252) || 1);
-  }, [series]);
+  function onCSV(e){
+    const f=e.target.files?.[0]; if(!f) return; const reader=new FileReader();
+    reader.onload=()=>{ try{ const arr=parseCSV(String(reader.result)); setRows(arr.map(o=>({...o,annee:+o.annee}))); }catch{ alert('CSV invalide'); } };
+    reader.readAsText(f);
+  }
 
   return (
-    <div className="p-6 grid gap-6">
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* Graphe des flux */}
-        <Card className="col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">Moteur de trading multi‑actifs <Badge>tick 500ms</Badge></CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="relative w-full overflow-hidden rounded-2xl bg-slate-900 p-4">
-              <svg viewBox="0 0 820 300" className="w-full h-[300px]">
-                {routes.map(r=> (
-                  <Arrow key={r.id} x1={r.a.x} y1={r.a.y} x2={r.b.x} y2={r.b.y} intensity={intensity[r.id]||0} />
-                ))}
-                {NODES.map(n=> (
-                  <g key={n.id} transform={`translate(${n.x-20}, ${n.y-20})`}>
-                    <foreignObject width="40" height="40">
-                      <div className="flex items-center justify-center" xmlns="http://www.w3.org/1999/xhtml">
-                        <NodeGlyph kind={n.kind}/>
-                      </div>
-                    </foreignObject>
-                    <text x={20} y={54} textAnchor="middle" className="fill-slate-200 text-[10px] font-medium">{n.label}</text>
-                  </g>
-                ))}
+    <div className="grid g-3">
+      <div className="panel">
+        <div className="title">Synthèse</div>
+        <div className="kpis">
+          <div className="kpi"><small>CA</small><div>€ {fmt(last.CA)}</div></div>
+          <div className="kpi"><small>EBITDA</small><div>€ {fmt(last.ebitda)} ({pct(last.ebitda/last.CA)})</div></div>
+          <div className="kpi"><small>Résultat net</small><div>€ {fmt(last.net)} ({pct(last.net/last.CA)})</div></div>
+          <div className="kpi"><small>Dette/EBITDA</small><div>{((last.dettesLT+last.dettesCT)/Math.max(1,last.ebitda)).toFixed(2)}x</div></div>
+          <div className="kpi"><small>Quick</small><div>{(rr.quick||0).toFixed(2)}</div></div>
+          <div className="kpi"><small>Leverage</small><div>{(rr.leverage||0).toFixed(2)}x</div></div>
+          <div className="kpi"><small>ROE</small><div>{((rr.roe||0)*100).toFixed(1)}%</div></div>
+          <div className="kpi"><small>CCC</small><div>{(rr.ccc||0).toFixed(0)} j</div></div>
+        </div>
 
-                {/* Indicateurs instantanés */}
-                {last && (
-                  <g transform={`translate(520, 10)`}>
-                    <rect width="280" height="80" rx="12" className="fill-white/10" />
-                    <text x={12} y={22} className="fill-white text-[12px]">PNL: {pnlPct.toFixed(2)}%</text>
-                    <text x={12} y={40} className="fill-white text-[12px]">Levier: {last.lev.toFixed(2)}x</text>
-                    <text x={12} y={58} className="fill-white text-[12px]">VaR95: {(last.var95*100).toFixed(2)}%</text>
-                    <text x={160} y={22} className="fill-white text-[12px]">DD: {(last.dd*100).toFixed(2)}%</text>
-                    <text x={160} y={40} className="fill-white text-[12px]">Sharpe: {sharpe.toFixed(2)}</text>
-                  </g>
-                )}
-              </svg>
+        <div className="grid" style={{gridTemplateColumns:'1fr 1fr', marginTop:12, gap:16}}>
+          <div className="panel" style={{background:'#0f172a'}}>
+            <div className="title">Résultats</div>
+            <div style={{height:260}}>
+              <ResponsiveContainer>
+                <LineChart data={data.map(d=>({t:d.annee, CA:d.CA, EBITDA:d.ebitda, Net:d.net}))}>
+                  <CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="t"/><YAxis/><Tooltip/><Legend/>
+                  <Line type="monotone" dataKey="CA" dot={false}/>
+                  <Line type="monotone" dataKey="EBITDA" dot={false}/>
+                  <Line type="monotone" dataKey="Net" dot={false}/>
+                </LineChart>
+              </ResponsiveContainer>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Contrôles */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Paramètres</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between"><span>Régime</span>
-                <Select value={regime} onValueChange={setRegime}>
-                  <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="normal">Normal</SelectItem>
-                    <SelectItem value="inflation">Inflation</SelectItem>
-                    <SelectItem value="crise">Crise</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+          </div>
+          <div className="panel" style={{background:'#0f172a'}}>
+            <div className="title">BFR / FRNG / Trésorerie nette</div>
+            <div style={{height:260}}>
+              <ResponsiveContainer>
+                <BarChart data={data.map(d=>({t:d.annee, BFR:d.bfr, FRNG:d.frng, TN:d.tn}))}>
+                  <CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="t"/><YAxis/><Tooltip/><Legend/>
+                  <Bar dataKey="BFR"/><Bar dataKey="FRNG"/><Bar dataKey="TN"/>
+                </BarChart>
+              </ResponsiveContainer>
             </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between"><span>Vol cible</span><Badge variant="outline">{Math.round(targetVol*1000)/10}%</Badge></div>
-              <Slider value={[targetVol]} min={0.03} max={0.30} step={0.005} onValueChange={(v)=>setTargetVol(v[0])}/>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between"><span>Levier max</span><Badge variant="outline">{maxLev.toFixed(2)}x</Badge></div>
-              <Slider value={[maxLev]} min={0.5} max={5} step={0.1} onValueChange={(v)=>setMaxLev(v[0])}/>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between"><span>Coût tx (bps)</span><Badge variant="outline">{tcBps}</Badge></div>
-              <Slider value={[tcBps]} min={0} max={50} step={1} onValueChange={(v)=>setTcBps(v[0])}/>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between"><span>Rééquilibrage (jours)</span><Badge variant="outline">{rebalanceDays}</Badge></div>
-              <Slider value={[rebalanceDays]} min={1} max={22} step={1} onValueChange={(v)=>setRebalanceDays(v[0])}/>
-            </div>
-            <div className="flex gap-2">
-              <Button onClick={()=>setRunning(r=>!r)} variant="secondary" className="w-full">{running?"Pause":"Reprendre"}</Button>
-              <Button variant="outline" className="w-full" onClick={()=>{ setSeries([]); dayRef.current=0; navRef.current=1; retHistRef.current=[]; }}>Reset</Button>
-            </div>
-            <div className="flex gap-2">
-              <Button onClick={()=>setSeedShock(dayRef.current+1)} className="w-full"><ShieldAlert className="mr-2" size={16}/>Choc 1j</Button>
-              <Button onClick={()=>setRegime("crise")} variant="destructive" className="w-full">Basculer Crise</Button>
-            </div>
-            <div className="text-xs text-slate-500 flex items-center gap-2"><ArrowLeftRight size={14}/> Turnover: {turnover.toFixed(3)} | Poids EQ {weights.EQ.toFixed(2)} FI {weights.FI.toFixed(2)} CM {weights.CM.toFixed(2)}</div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
-      {/* Courbes */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Métriques de performance</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="nav">
-            <TabsList className="grid grid-cols-4 w-full">
-              <TabsTrigger value="nav">Courbe NAV</TabsTrigger>
-              <TabsTrigger value="ret">Rendement</TabsTrigger>
-              <TabsTrigger value="risk">Risque</TabsTrigger>
-              <TabsTrigger value="w">Poids</TabsTrigger>
-            </TabsList>
-            <TabsContent value="nav" className="mt-4">
-              <div className="h-64">
-                <ResponsiveContainer>
-                  <AreaChart data={series} margin={{top:10, right:20, left:0, bottom:0}}>
-                    <defs>
-                      <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="currentColor" stopOpacity={0.7}/>
-                        <stop offset="95%" stopColor="currentColor" stopOpacity={0.05}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3"/>
-                    <XAxis dataKey="t" hide/>
-                    <YAxis domain={[0.6, Math.max(1.8, (last?last.nav:1.0)+0.2)]}/>
-                    <RTooltip/>
-                    <Area type="monotone" dataKey="nav" stroke="currentColor" fillOpacity={1} fill="url(#g1)"/>
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </TabsContent>
-            <TabsContent value="ret" className="mt-4">
-              <div className="h-64">
-                <ResponsiveContainer>
-                  <LineChart data={series}>
-                    <CartesianGrid strokeDasharray="3 3"/>
-                    <XAxis dataKey="t" hide/>
-                    <YAxis/>
-                    <RTooltip/>
-                    <Legend/>
-                    <Line type="monotone" dataKey="ret" name="ret jour" dot={false} stroke="currentColor"/>
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </TabsContent>
-            <TabsContent value="risk" className="mt-4">
-              <div className="h-64">
-                <ResponsiveContainer>
-                  <LineChart data={series}>
-                    <CartesianGrid strokeDasharray="3 3"/>
-                    <XAxis dataKey="t" hide/>
-                    <YAxis/>
-                    <RTooltip/>
-                    <Line type="monotone" dataKey="var95" name="VaR95" dot={false}/>
-                    <Line type="monotone" dataKey="dd" name="Drawdown" dot={false}/>
-                    <Line type="monotone" dataKey="lev" name="Levier" dot={false}/>
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </TabsContent>
-            <TabsContent value="w" className="mt-4">
-              <div className="h-64">
-                <ResponsiveContainer>
-                  <BarChart data={[{name:"Poids", EQ:weights.EQ, FI:weights.FI, CM:weights.CM}]}> 
-                    <CartesianGrid strokeDasharray="3 3"/>
-                    <XAxis dataKey="name"/>
-                    <YAxis domain={[0,1]}/>
-                    <RTooltip/>
-                    <Bar dataKey="EQ" name="EQ"/>
-                    <Bar dataKey="FI" name="FI"/>
-                    <Bar dataKey="CM" name="CM"/>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+      <div className="panel">
+        <div className="title">Données</div>
+        <div className="controls">
+          <div className="row"><label>Importer CSV</label><input type="file" accept=".csv" onChange={onCSV}/></div>
+          <div className="hint">Colonnes: annee, CA, COGS, OPEX, DandA, interets, impots, stocks, clients, fournisseurs, immoNette, tresorerie, capitauxPropres, dettesLT, dettesCT, capex</div>
+        </div>
+        <div className="title" style={{marginTop:12}}>Ratios clés</div>
+        <table className="tbl">
+          <thead>
+            <tr><th>Année</th><th>EBITDA%</th><th>Net%</th><th>Quick</th><th>Leverage</th><th>Dette/EBITDA</th><th>Cover</th><th>ROE</th><th>CCC</th></tr>
+          </thead>
+          <tbody>
+            {R.map(x=> (
+              <tr key={x.annee}>
+                <td style={{textAlign:'left'}}>{x.annee}</td>
+                <td>{(x.marginEbitda*100).toFixed(1)}%</td>
+                <td>{(x.marginNet*100).toFixed(1)}%</td>
+                <td>{x.quick.toFixed(2)}</td>
+                <td>{x.leverage.toFixed(2)}x</td>
+                <td>{x.debtEbitda.toFixed(2)}x</td>
+                <td>{x.intCover.toFixed(1)}x</td>
+                <td>{(x.roe*100).toFixed(1)}%</td>
+                <td>{x.ccc.toFixed(0)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Mode d'emploi</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-slate-700 space-y-2">
-          <ul className="list-disc pl-5 space-y-1">
-            <li>Le curseur « Vol cible » ajuste le levier pour viser une volatilité annualisée donnée.</li>
-            <li>Rééquilibrage risk parity tous les N jours. Les coûts s'appliquent au turnover.</li>
-            <li>VaR95 calculée sur l'historique récent. Drawdown par rapport au pic de NAV.</li>
-            <li>Le bouton « Choc 1j » injecte un day‑shock typé risk‑off.</li>
-          </ul>
-        </CardContent>
-      </Card>
+        <div className="title" style={{marginTop:12}}>Flux de trésorerie (indirect)</div>
+        <div style={{height:240}}>
+          <ResponsiveContainer>
+            <BarChart data={data.map(d=>({t:d.annee, CFO:d.cfo, CFI:-d.capex, FCFF:d.fcff}))}>
+              <CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="t"/><YAxis/><Tooltip/><Legend/>
+              <Bar dataKey="CFO"/><Bar dataKey="CFI"/><Bar dataKey="FCFF"/>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
     </div>
   );
 }
+
+ReactDOM.createRoot(document.getElementById('app')).render(<App/>);
+  </script>
+</body>
+</html>
